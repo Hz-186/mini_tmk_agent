@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"project_for_tmk_04_06/web"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
-	"mini-tmk-agent/web"
 )
 
 type TranslationEvent struct {
@@ -21,8 +21,7 @@ var (
 	clients   = make(map[*websocket.Conn]bool)
 	clientsMu sync.Mutex
 	EventBus  = make(chan TranslationEvent, 10)
-
-	upgrader = websocket.Upgrader{
+	upgrader  = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},
@@ -56,6 +55,7 @@ func StartServer(port int) {
 
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	slog.Info(fmt.Sprintf("Web UI running at http://localhost:%d", port))
+
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		slog.Error("ListenAndServe failed", "err", err)
 	}

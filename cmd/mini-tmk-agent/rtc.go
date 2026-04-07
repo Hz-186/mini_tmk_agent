@@ -5,15 +5,17 @@ import (
 
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
+	"project_for_tmk_04_06/internal/webrtc"
 )
 
 var rtcCmd = &cobra.Command{
 	Use:   "rtc",
 	Short: "WebRTC peer-to-peer commands",
 }
+
 var rtcHostCmd = &cobra.Command{
 	Use:   "host",
-	Short: "Host a new P2P room",
+	Short: "建立一个 p2p 房间",
 	Run: func(cmd *cobra.Command, args []string) {
 		manager := webrtc.NewRTCManager()
 		if err := manager.Host(cmd.Context(), sourceLang, targetLang, ttsEnabled); err != nil {
@@ -25,7 +27,7 @@ var rtcHostCmd = &cobra.Command{
 
 var rtcJoinCmd = &cobra.Command{
 	Use:   "join",
-	Short: "Join a new P2P room",
+	Short: "加入一个 p2p 房间",
 	Run: func(cmd *cobra.Command, args []string) {
 		manager := webrtc.NewRTCManager()
 		if err := manager.Join(cmd.Context(), args[0]); err != nil {
