@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini TMK Agent</title>
+    <!-- Use Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --text-color: #f8fafc;
+            --accent-color: #3b82f6;
+            --card-bg: rgba(30, 41, 59, 0.7);
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at 50% 0%, #1e293b 0%, var(--bg-color) 70%);
+            color: var(--text-color);
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            font-weight: 800;
+            background: linear-gradient(135deg, #60a5fa, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 2rem;
+        }
+        #transcript-container {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            padding-bottom: 50px;
+        }
+        .message {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transform: translateY(20px);
+            opacity: 0;
+            animation: slideUp 0.4s ease forwards;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        @keyframes slideUp {
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .source {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+        }
+        .translation {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        .status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid #059669;
+        }
+        .status.disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid #dc2626;
+        }
+    </style>
+</head>
+<body>
+<h1>Mini TMK Agent</h1>
+<div id="transcript-container"></div>
+<div id="status" class="status disconnected">Disconnected</div>
+
+<script>
+    const container = document.getElementById('transcript-container');
+    const statusEl = document.getElementById('status');
+
+    function connect() {
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
+
+        ws.onopen = () => {
+            statusEl.textContent = 'Connected (Live)';
+            statusEl.className = 'status connected';
+        };
+
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            addMessage(data.source, data.translation);
+        };
+
+        ws.onclose = () => {
+            statusEl.textContent = 'Disconnected. Retrying...';
+            statusEl.className = 'status disconnected';
+            setTimeout(connect, 3000);
+        };
+    }
+
+    function addMessage(sourceText, translationText) {
+        const msgEl = document.createElement('div');
+        msgEl.className = 'message';
+
+        const sourceEl = document.createElement('div');
+        sourceEl.className = 'source';
+        sourceEl.textContent = sourceText;
+
+        const transEl = document.createElement('div');
+        transEl.className = 'translation';
+        transEl.textContent = translationText;
+
+        msgEl.appendChild(sourceEl);
+        msgEl.appendChild(transEl);
+
+        container.appendChild(msgEl);
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+
+    connect();
+</script>
+</body>
+</html>

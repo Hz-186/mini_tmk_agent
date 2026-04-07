@@ -38,7 +38,6 @@ func (e *EdgeTTS) Synthesize(ctx context.Context, text string, lang string) ([]b
 	tempName := tempFile.Name()
 	tempFile.Close()
 	defer os.Remove(tempName)
-
 	args := edgeTTS.Args{
 		Text:       text,
 		Voice:      voice,
@@ -46,6 +45,7 @@ func (e *EdgeTTS) Synthesize(ctx context.Context, text string, lang string) ([]b
 		Rate:       "+0%",
 		WriteMedia: tempName,
 	}
+
 	ttsCli := edgeTTS.NewTTS(args)
 	if ttsCli == nil {
 		return nil, fmt.Errorf("failed to init Edge TTS client")

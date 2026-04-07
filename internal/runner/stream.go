@@ -1,0 +1,105 @@
+package runner
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"os"
+	"project_for_tmk_04_06/internal/ai/asr"
+	"project_for_tmk_04_06/internal/ai/llm"
+	"project_for_tmk_04_06/internal/ai/tts"
+	"project_for_tmk_04_06/internal/audio"
+	webserver "project_for_tmk_04_06/internal/web"
+	"strings"
+
+	"github.com/pterm/pterm"
+)
+
+type StreamRunner struct {
+	asrClient asr.ASR
+	llmClient llm.LLM
+	ttsClient tts.TTS
+	Callback  func(source string, translation string)
+}
+
+func NewStreamRunner() *StreamRunner {
+	return &StreamRunner{
+		asrClient: asr.NewSiliconFlowASR(),
+		llmClient: llm.NewSiliconFlowLLM(),
+		ttsClient: tts.NewEdgeTTS(),
+	}
+}
+
+func (r *StreamRunner) Run(ctx context.Context, sourceLang, targetLang string, enableTTS bool) error {
+	pterm.DefaultHeader.WithFullWidth().Println("🎙️ Mini TMK Agent - Simultaneous Interpretation Stream")
+	pterm.Info.Printf("Direction: %s -> %s | TTS Active: %v\n\n", sourceLang, targetLang, enableTTS)
+
+	sampleRate := uint32(16000)
+	channels := uint16(1)
+	recorder, err := audio.NewSimpleRecorder(sampleRate, channels)
+	if err != nil {
+		return fmt.Errorf("failed to init recorder: %w", err)
+	}
+
+	phraseChan, err := recorder.Start(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start recording: %w", err)
+	}
+	pterm.Success.Println("Listening... Speak into the microphone OR type text directly here and press ENTER. (Press Ctrl+C to stop)")
+
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			text := strings.TrimSpace(scanner.Text())
+			if text != "" {
+				pterm.Info.Printf("⌨️ [Manual Input Simulated]: %s\n", text)
+				go r.processTextDirectly(ctx, text, sourceLang, targetLang, enableTTS)
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (r *StreamRunner) processTextDirectly(ctx context.Context, text string, source string, target string, enableTTS bool) {
+	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("[%s]: %s", source, text))
+	spinner.Success()
+
+	streamPanel, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("[%s]: Translating...", target))
+
+	translateChan, err := r.llmClient.TranslateStream(ctx, text, source, target)
+	if err != nil {
+		streamPanel.Fail("Translation failed: ", err)
+		return
+	}
+
+	var fullTranslation string
+	for token := range translateChan {
+		fullTranslation += token
+		streamPanel.UpdateText(fmt.Sprintf("[%s]: %s", target, fullTranslation))
+	}
+	streamPanel.Success(fmt.Sprintf("[%s]: %s", target, fullTranslation))
+
+	// Push to UI via EventBus if running in serve mode
+	select {
+	case webserver.EventBus <- webserver.TranslationEvent{
+		Source:      text,
+		Translation: fullTranslation,
+	}:
+	default: // don't block
+	}
+
+	if r.Callback != nil {
+		r.Callback(text, fullTranslation)
+	}
+
+	if enableTTS && fullTranslation != "" {
+		audioData, err := r.ttsClient.Synthesize(ctx, fullTranslation, target)
+		if err == nil && len(audioData) > 0 {
+			pterm.Info.Println("🎵 [Playing TTS...]")
+			if err := audio.PlayMP3(audioData); err != nil {
+				pterm.Error.Println("Failed to play TTS:", err)
+			}
+		}
+	}
+}

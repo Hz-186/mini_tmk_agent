@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"project_for_tmk_04_06/internal/ai/tts"
 	"project_for_tmk_04_06/internal/audio"
+	"project_for_tmk_04_06/internal/runner"
 	"strings"
 
 	"github.com/pion/webrtc/v4"
@@ -31,6 +33,8 @@ func NewRTCManager() *RTCManager {
 		ttsClient: tts.NewEdgeTTS(),
 	}
 }
+
+// SDP to base64  / base64 to SDP
 
 // 编码
 func Encode(obj interface{}) (string, error) {
@@ -59,15 +63,19 @@ func readStdin() string {
 
 // 定义一下钩子
 func (r *RTCManager) setupCallbacks(peerConnection *webrtc.PeerConnection) {
+	// 定义 ICEConnectionStateChange 的钩子
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		pterm.Info.Printf("RTC ICE Connection State has changed: %s\n", connectionState.String())
 	})
 }
+
 func (r *RTCManager) setupDataChannel(dc *webrtc.DataChannel) {
+	// Open 的钩子
 	dc.OnOpen(func() {
 		pterm.Success.Printf("Data channel '%s'-'%d' open. Ready to communicate!\n", dc.Label(), dc.ID())
 	})
 
+	// Message 的钩子
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		pterm.Info.Println("<<< Received DataChannel Message")
 		var payload Payload
@@ -85,8 +93,68 @@ func (r *RTCManager) setupDataChannel(dc *webrtc.DataChannel) {
 }
 
 func (r *RTCManager) Host(ctx context.Context, sourceLang, targetLang string, ttsEnabled bool) error {
+	config := webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+		},
+	}
+	con, err := r.api.NewPeerConnection(config)
+	if err != nil {
+		return err
+	}
 
-	return nil
+	defer con.Close()
+
+	r.setupCallbacks(con)
+	dc, err := con.CreateDataChannel("translations", nil)
+	if err != nil {
+		return err
+	}
+	r.setupDataChannel(dc)
+	// 钩子的设置
+
+	offer, err := con.CreateOffer(nil) // Host 的自我介绍信
+	if err != nil {
+		return err
+	}
+	if err = con.SetLocalDescription(offer); err != nil {
+		return err
+	}
+	<-webrtc.GatheringCompletePromise(con)
+
+	encodedOffer, _ := Encode(con.LocalDescription())
+
+	pterm.DefaultHeader.Println("🏠 RTC Host Mode")
+	pterm.Warning.Println("Please copy the line below and share it with the joining peer as their <room-id>:")
+
+	fmt.Printf("\n%s\n\n", encodedOffer)
+
+	pterm.Info.Println("Paste the Answer from joining peer below and press ENTER:")
+
+	answerStr := readStdin()
+
+	var answer webrtc.SessionDescription
+	if err := Decode(answerStr, &answer); err != nil {
+		return fmt.Errorf("failed to decode answer: %w", err)
+	}
+	if err := con.SetRemoteDescription(answer); err != nil {
+		return fmt.Errorf("failed to set remote description: %w", err)
+	}
+
+	// 连接成功
+	streamRn := runner.NewStreamRunner()
+
+	streamRn.Callback = func(source, translation string) {
+		payload := Payload{
+			Language: targetLang,
+			Text:     translation,
+		}
+		if data, err := json.Marshal(payload); err == nil {
+			_ = dc.Send(data)
+		}
+	}
+
+	return streamRn.Run(ctx, sourceLang, targetLang, ttsEnabled)
 }
 
 func (r *RTCManager) Join(ctx context.Context, roomID string) error {
