@@ -29,7 +29,10 @@ func Load() error {
 	if err != nil {
 		return fmt.Errorf("unable to decode into struct: %w", err)
 	}
-	if osKey := os.Getenv("TMK_AI_KEY"); osKey != "" {
+	if envKey := viper.GetString("ai.silicon_flow_key"); envKey != "" {
+		AppConfig.AI.Key = envKey
+	}
+	if osKey := os.Getenv("TMK_AI_SILICON_FLOW_KEY"); osKey != "" {
 		AppConfig.AI.Key = osKey
 	}
 	return nil

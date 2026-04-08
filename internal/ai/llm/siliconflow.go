@@ -5,26 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
 	"project_for_tmk_04_06/internal/config"
 
 	"github.com/sashabaranov/go-openai"
 )
 
-// 大语言模型
-// Large Language Model
-
+// SiliconFlowLLM implements LLM interface using SiliconFlow (OpenAI compatible).
 type SiliconFlowLLM struct {
 	client *openai.Client
 	model  string
 }
 
 func NewSiliconFlowLLM() *SiliconFlowLLM {
+	fmt.Printf("DEBUG KEY LENGTH: %d\n", len(config.AppConfig.AI.Key))
 	cfg := openai.DefaultConfig(config.AppConfig.AI.Key)
 	cfg.BaseURL = config.AppConfig.AI.BaseURL
 
 	return &SiliconFlowLLM{
 		client: openai.NewClientWithConfig(cfg),
-		model:  "Qwen/Qwen2.5-7B-Instruct",
+		model:  "Qwen/Qwen2.5-7B-Instruct", // Free tier model automatically
 	}
 }
 
@@ -51,7 +51,6 @@ func (s *SiliconFlowLLM) Translate(ctx context.Context, sourceText, sourceLang, 
 	if err != nil {
 		return "", fmt.Errorf("LLM translation failed: %w", err)
 	}
-
 	if len(resp.Choices) > 0 {
 		return resp.Choices[0].Message.Content, nil
 	}
@@ -75,7 +74,6 @@ func (s *SiliconFlowLLM) TranslateStream(ctx context.Context, sourceText, source
 	go func() {
 		defer stream.Close()
 		defer close(outChan)
-
 		for {
 			resp, err := stream.Recv()
 			if errors.Is(err, io.EOF) {

@@ -10,7 +10,6 @@ import (
 	"github.com/hajimehoshi/go-mp3"
 )
 
-// PlayMP3 plays the given MP3 byte slice using malgo sequentially (blocking).
 func PlayMP3(mp3Data []byte) error {
 	decoder, err := mp3.NewDecoder(bytes.NewReader(mp3Data))
 	if err != nil {

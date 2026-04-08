@@ -11,7 +11,8 @@ var debug bool
 
 var rootCmd = &cobra.Command{
 	Use:   "mini-tmk-agent",
-	Short: "同声传译小工具",
+	Short: "Mini TMK Agent is a CLI tool for simultaneous translation",
+	Long:  `A powerful, purely Go-based CLI agent for real-time and file-based simultaneous interpretation.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if debug {
 			logger.EnableDebug()
@@ -21,10 +22,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().
-		BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
 }
-
 func Execute() error {
 	return rootCmd.Execute()
 }

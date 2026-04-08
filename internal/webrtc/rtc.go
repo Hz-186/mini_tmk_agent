@@ -16,7 +16,6 @@ import (
 	"github.com/pterm/pterm"
 )
 
-// 返回的结果
 type Payload struct {
 	Language string `json:"language"`
 	Text     string `json:"text"`
@@ -30,13 +29,10 @@ type RTCManager struct {
 func NewRTCManager() *RTCManager {
 	return &RTCManager{
 		api:       webrtc.NewAPI(),
-		ttsClient: tts.NewEdgeTTS(),
+		ttsClient: tts.NewSiliconFlowTTS(),
 	}
 }
 
-// SDP to base64  / base64 to SDP
-
-// 编码
 func Encode(obj interface{}) (string, error) {
 	b, err := json.Marshal(obj)
 	if err != nil {
@@ -45,7 +41,6 @@ func Encode(obj interface{}) (string, error) {
 	return base64.StdEncoding.EncodeToString(b), nil
 }
 
-// 解码
 func Decode(in string, obj interface{}) error {
 	b, err := base64.StdEncoding.DecodeString(in)
 	if err != nil {
@@ -57,29 +52,23 @@ func Decode(in string, obj interface{}) error {
 func readStdin() string {
 	reader := bufio.NewReader(os.Stdin)
 	text, _ := reader.ReadString('\n')
-
 	return strings.TrimSpace(text)
 }
 
-// 定义一下钩子
 func (r *RTCManager) setupCallbacks(peerConnection *webrtc.PeerConnection) {
-	// 定义 ICEConnectionStateChange 的钩子
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		pterm.Info.Printf("RTC ICE Connection State has changed: %s\n", connectionState.String())
 	})
 }
 
 func (r *RTCManager) setupDataChannel(dc *webrtc.DataChannel) {
-	// Open 的钩子
 	dc.OnOpen(func() {
 		pterm.Success.Printf("Data channel '%s'-'%d' open. Ready to communicate!\n", dc.Label(), dc.ID())
 	})
 
-	// Message 的钩子
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
 		pterm.Info.Println("<<< Received DataChannel Message")
 		var payload Payload
-
 		if err := json.Unmarshal(msg.Data, &payload); err == nil {
 			pterm.Success.Printf("PEER [%s]: %s\n", payload.Language, payload.Text)
 			if payload.Text != "" {
@@ -98,50 +87,49 @@ func (r *RTCManager) Host(ctx context.Context, sourceLang, targetLang string, tt
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 		},
 	}
-	con, err := r.api.NewPeerConnection(config)
+	pc, err := r.api.NewPeerConnection(config)
 	if err != nil {
 		return err
 	}
+	defer pc.Close()
 
-	defer con.Close()
+	r.setupCallbacks(pc)
 
-	r.setupCallbacks(con)
-	dc, err := con.CreateDataChannel("translations", nil)
+	dc, err := pc.CreateDataChannel("translations", nil)
 	if err != nil {
 		return err
 	}
 	r.setupDataChannel(dc)
-	// 钩子的设置
 
-	offer, err := con.CreateOffer(nil) // Host 的自我介绍信
+	offer, err := pc.CreateOffer(nil)
 	if err != nil {
 		return err
 	}
-	if err = con.SetLocalDescription(offer); err != nil {
+	if err = pc.SetLocalDescription(offer); err != nil {
 		return err
 	}
-	<-webrtc.GatheringCompletePromise(con)
 
-	encodedOffer, _ := Encode(con.LocalDescription())
+	gatherComplete := webrtc.GatheringCompletePromise(pc)
+	<-gatherComplete
 
+	encodedOffer, _ := Encode(pc.LocalDescription())
 	pterm.DefaultHeader.Println("🏠 RTC Host Mode")
 	pterm.Warning.Println("Please copy the line below and share it with the joining peer as their <room-id>:")
-
 	fmt.Printf("\n%s\n\n", encodedOffer)
 
 	pterm.Info.Println("Paste the Answer from joining peer below and press ENTER:")
-
 	answerStr := readStdin()
 
 	var answer webrtc.SessionDescription
 	if err := Decode(answerStr, &answer); err != nil {
 		return fmt.Errorf("failed to decode answer: %w", err)
 	}
-	if err := con.SetRemoteDescription(answer); err != nil {
+
+	if err := pc.SetRemoteDescription(answer); err != nil {
 		return fmt.Errorf("failed to set remote description: %w", err)
 	}
 
-	// 连接成功
+	// We are connected. Start localized StreamRunner that forwards translation
 	streamRn := runner.NewStreamRunner()
 
 	streamRn.Callback = func(source, translation string) {
@@ -158,5 +146,48 @@ func (r *RTCManager) Host(ctx context.Context, sourceLang, targetLang string, tt
 }
 
 func (r *RTCManager) Join(ctx context.Context, roomID string) error {
+	config := webrtc.Configuration{
+		ICEServers: []webrtc.ICEServer{
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+		},
+	}
+	pc, err := r.api.NewPeerConnection(config)
+	if err != nil {
+		return err
+	}
+	defer pc.Close()
+
+	r.setupCallbacks(pc)
+
+	pc.OnDataChannel(func(d *webrtc.DataChannel) {
+		r.setupDataChannel(d)
+	})
+
+	var offer webrtc.SessionDescription
+	if err := Decode(roomID, &offer); err != nil {
+		return fmt.Errorf("invalid room ID: %w", err)
+	}
+
+	if err := pc.SetRemoteDescription(offer); err != nil {
+		return fmt.Errorf("failed to set remote offer: %w", err)
+	}
+
+	answer, err := pc.CreateAnswer(nil)
+	if err != nil {
+		return err
+	}
+	if err := pc.SetLocalDescription(answer); err != nil {
+		return err
+	}
+
+	gatherComplete := webrtc.GatheringCompletePromise(pc)
+	<-gatherComplete
+
+	encodedAnswer, _ := Encode(pc.LocalDescription())
+	pterm.DefaultHeader.Println("🤝 RTC Join Mode")
+	pterm.Success.Println("Connected to offer! Copy the answer below and provide it to the Host:")
+	fmt.Printf("\n%s\n\n", encodedAnswer)
+
+	<-ctx.Done()
 	return nil
 }

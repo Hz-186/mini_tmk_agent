@@ -49,13 +49,11 @@ func StartServer(port int) {
 			return nil
 		})
 
-		// Send a welcome immediately
 		_ = ws.WriteJSON(TranslationEvent{Source: "Agent System", Translation: "Connected. Ready to translate."})
 	})
 
 	addr := fmt.Sprintf("0.0.0.0:%d", port)
 	slog.Info(fmt.Sprintf("Web UI running at http://localhost:%d", port))
-
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		slog.Error("ListenAndServe failed", "err", err)
 	}

@@ -12,6 +12,7 @@ func main() {
 		log.Fatal(err)
 		os.Exit(1)
 	}
+
 	err = Execute()
 	if err != nil {
 		log.Fatal(err)

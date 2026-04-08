@@ -13,10 +13,9 @@ var (
 	targetLang string
 	ttsEnabled bool
 )
-
 var streamCmd = &cobra.Command{
 	Use:   "stream",
-	Short: " ",
+	Short: "Start stream mode for simultaneous interpretation",
 	Run: func(cmd *cobra.Command, args []string) {
 		slog.Debug("Starting stream mode", "source", sourceLang, "target", targetLang, "tts", ttsEnabled)
 		ctx := cmd.Context()

@@ -19,7 +19,6 @@ type SiliconFlowASR struct {
 func NewSiliconFlowASR() *SiliconFlowASR {
 	cfg := openai.DefaultConfig(config.AppConfig.AI.Key)
 	cfg.BaseURL = config.AppConfig.AI.BaseURL
-
 	return &SiliconFlowASR{
 		client: openai.NewClientWithConfig(cfg),
 		model:  "FunAudioLLM/SenseVoiceSmall",
@@ -44,10 +43,9 @@ func (s *SiliconFlowASR) TranscribeBytes(ctx context.Context, audioData []byte, 
 		Reader:   bytes.NewReader(audioData),
 		FilePath: "audio.wav", // Dummy filename required by API
 	}
-
 	resp, err := s.client.CreateTranscription(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("SiliconFlow ASR TranscribeBytes failed: %w", err)
+		return "", fmt.Errorf("SiliconFlow ASR transcription (bytes) failed: %w", err)
 	}
 	return resp.Text, nil
 }

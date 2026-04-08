@@ -8,6 +8,10 @@ import (
 	"github.com/surfaceyu/edge-tts-go/edgeTTS"
 )
 
+/* ########
+出于某种特殊的不可抗力，edge 的 TTS 不可使用
+ ######## */
+
 type EdgeTTS struct{}
 
 func NewEdgeTTS() *EdgeTTS {

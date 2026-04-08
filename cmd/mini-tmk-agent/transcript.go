@@ -17,7 +17,7 @@ var (
 
 var transcriptCmd = &cobra.Command{
 	Use:   "transcript",
-	Short: "翻译音频",
+	Short: "Start transcript mode to process an audio file",
 	Run: func(cmd *cobra.Command, args []string) {
 		if transcriptFile == "" {
 			var err error
@@ -41,7 +41,7 @@ var transcriptCmd = &cobra.Command{
 }
 
 func init() {
-	transcriptCmd.Flags().StringVarP(&transcriptFile, "file", "f", "", "File to transcribe")
-	transcriptCmd.Flags().StringVarP(&transcriptOutput, "output", "o", "transcript.txt", "File to output")
+	transcriptCmd.Flags().StringVar(&transcriptFile, "file", "", "Audio file to transcript (If empty, a file picker GUI will open)")
+	transcriptCmd.Flags().StringVar(&transcriptOutput, "output", "transcript.txt", "Destination file path")
 	rootCmd.AddCommand(transcriptCmd)
 }
